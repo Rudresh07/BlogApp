@@ -1,5 +1,6 @@
 package com.example.blog.view.screen
 
+import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,20 +33,26 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.example.blog.utils.isOnline
 import com.example.blog.view.component.BlogCard
+import com.example.blog.view.component.OfflineBlogCard
 import com.example.blog.viewmodel.BlogViewModel
+import com.example.blog.viewmodel.OfflineBlogViewmodel
 import kotlinx.coroutines.launch
 
 @Composable
 fun BlogList(navController: NavController) {
     val viewModel: BlogViewModel = viewModel()  // ViewModel instance
-    BlogListScreen(viewModel,navController)
+    val OfflineviewModel = OfflineBlogViewmodel.OfflineBlogViewmodelFactory(LocalContext.current).create(
+        OfflineBlogViewmodel::class.java)
+    BlogListScreen(viewModel,navController,OfflineviewModel)
 }
 
 @Composable
 fun BlogListScreen(
     viewModel: BlogViewModel,
     navController: NavController,
+    offlineViewModel: OfflineBlogViewmodel,
     modifier: Modifier = Modifier
 
 ) {
@@ -55,11 +62,19 @@ fun BlogListScreen(
     val page by viewModel.page.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
+    val offlineBlogs by offlineViewModel.offlineBlogs.collectAsState()
+    val context = LocalContext.current
+
     val listState = rememberLazyGridState() // Preserve scroll position
+
 
     LaunchedEffect(Unit) {
         coroutineScope.launch {
-            viewModel.fetchBlogs(page)  // Ensure suspend function is called properly
+            if (isOnline(context)) { // Check if user is online
+                viewModel.fetchBlogs(page)
+            } else {
+                offlineViewModel.getAllBlogs() // Load locally saved blogs if offline
+            }
         }
     }
 
@@ -82,6 +97,9 @@ fun BlogListScreen(
             }
 
             else -> {
+                val displayedBlogs =  offlineBlogs // Show online blogs or offline blogs
+
+
                 LazyVerticalGrid(
                     state = listState,
                     columns = GridCells.Adaptive(minSize = 300.dp),
@@ -89,32 +107,50 @@ fun BlogListScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     horizontalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
+                    if (isOnline(context)) {
                     items(blogs) { blog ->
                         BlogCard(blog = blog,
                             modifier = Modifier.clickable{
                                 navController.navigate("BlogDetailScreen/${blog.id}")
                             })
                     }
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(4.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Button(
-                                onClick = { viewModel.loadNextPage() },
-                                enabled = !isLoading
+
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(4.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Text(text = "Next")
+                                Button(
+                                    onClick = { viewModel.loadNextPage() },
+                                    enabled = !isLoading
+                                ) {
+                                    Text(text = "Next")
+                                }
                             }
                         }
                     }
+                    else {
+                        items(displayedBlogs) { offlineBlog ->
+                            OfflineBlogCard(
+                                offlineBlog = offlineBlog,
+                                modifier = Modifier.clickable {
+                                    navController.navigate(
+                                        "OfflineBlogDetailScreen/${Uri.encode(offlineBlog.title)}/${Uri.encode(offlineBlog.content ?: "No content available")}"
+                                    )
+
+                                },
+                                onClick = {})
+                        }
+                    }
+
                 }
             }
         }
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -128,8 +164,3 @@ private fun BlogListTopBar(
     )
 }
 
-@Preview
-@Composable
-fun PreviewBlogList() {
-    BlogListScreen(viewModel = BlogViewModel(), navController = NavController(LocalContext.current))
-}

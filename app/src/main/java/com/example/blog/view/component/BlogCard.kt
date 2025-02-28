@@ -4,23 +4,22 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardColors
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -33,12 +32,23 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.example.blog.R
 import com.example.blog.domain.data.Blog
+import com.example.blog.viewmodel.OfflineBlogViewmodel
+import kotlinx.coroutines.launch
 
 @Composable
 fun BlogCard(
     modifier: Modifier = Modifier,
     blog: Blog
 ) {
+    val viewModel = OfflineBlogViewmodel.OfflineBlogViewmodelFactory(LocalContext.current).create(
+        OfflineBlogViewmodel::class.java)
+    val coroutineScope = rememberCoroutineScope()
+
+    // Track favorite state
+    val favoriteBlogs by viewModel.offlineBlogs.collectAsState()
+
+    var isFavorite = favoriteBlogs.any { it.BlogId == blog.id }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -47,21 +57,20 @@ fun BlogCard(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically // Vertically center content
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Image taking up 60% of the space
+            // Blog Image
             BlogCardImage(
-                modifier = Modifier
-                    .weight(0.35f),
+                modifier = Modifier.weight(0.35f),
                 imageUrl = blog.jetpack_featured_media_url
             )
 
-            // Text and bookmark button taking 40%
+            // Title & Favorite Button
             Column(
                 modifier = Modifier
-                    .weight(0.5f) // 40% weight for text and button
+                    .weight(0.5f)
                     .padding(10.dp),
-                verticalArrangement = Arrangement.Center, // Vertically center text & button
+                verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
@@ -71,28 +80,39 @@ fun BlogCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth()
                 )
-
             }
 
             Column(
-                modifier = Modifier
-                    .weight(0.1f),
-                verticalArrangement = Arrangement.Center, // Vertically center text & button
+                modifier = Modifier.weight(0.1f),
+                verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
-            ){
-                IconButton(onClick = { /* Handle bookmark action */ }) {
+            ) {
+                IconButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            if (isFavorite) {
+                                viewModel.removeBlog(blog.id) // Remove from local storage
+                            } else {
+//                                val offlineBlog = OfflineBlog(
+//                                    BlogId = blog.id,
+//                                    title = blog.title.rendered,
+//                                    content = blog.content.rendered
+//                                )
+                                viewModel.fetchAndSaveBlog(blog.id)
+                                isFavorite= !isFavorite
+                            }
+                        }
+                    }
+                ) {
                     Icon(
-                        imageVector = Icons.Default.FavoriteBorder,
+                        imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Default.FavoriteBorder,
                         contentDescription = "Bookmark"
                     )
                 }
             }
-
-
         }
     }
 }
-
 
 @Composable
 private fun BlogCardImage(
@@ -106,9 +126,7 @@ private fun BlogCardImage(
         .crossfade(enable = true)
         .build()
 
-    Box(
-        modifier = modifier
-    ) {
+    Box(modifier = modifier) {
         AsyncImage(
             modifier = Modifier.fillMaxSize(),
             model = imageRequest,

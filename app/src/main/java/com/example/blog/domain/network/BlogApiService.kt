@@ -9,14 +9,14 @@ import retrofit2.http.Query
 interface BlogApiService {
     @GET("posts")
     suspend fun getBlogs(
-        @Query("per_page") perPage: Int = 10, // Default values to prevent issues
+        @Query("per_page") perPage: Int = 10,
         @Query("page") page: Int = 1
-    ): Response<List<Blog>> // Use Response<> for safe handling
+    ): Response<List<Blog>>
 
     @GET("posts/{id}")
     suspend fun getBlogById(
         @Path("id") id: Int
-    ): Response<Blog> // Use Response<> for error handling
+    ): Response<Blog>
 
     companion object {
         private const val BASE_URL = "https://blog.vrid.in/wp-json/wp/v2/"
